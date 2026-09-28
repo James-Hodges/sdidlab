@@ -21,10 +21,17 @@ Depends:
     R (>= 4.1)
 Imports:
     cli,
+    digest,
+    ggplot2 (>= 3.4.0),
+    jsonlite,
     purrr,
+    rlang,
+    scales,
     stats,
     synthdid,
-    tibble
+    tibble,
+    utils,
+    yaml
 Suggests:
     fixest,
     Synth,
