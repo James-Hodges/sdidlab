@@ -246,9 +246,9 @@ server <- function(input, output, session) {
     }
     f <- run$fit
     ci <- if (is.na(f$se)) "no interval" else sprintf("[%s, %s]", signif(f$ci_lo, 3), signif(f$ci_hi, 3))
-    warn <- if (isTRUE(f$exact_fit)) {
+    warn <- if (isTRUE(f$exact_match) && run$spec$scm$penalty == 0) {
       div(class = "alert alert-warning mt-2",
-          "The synthetic control fits the pre-period exactly, so its weights (and the estimate) are not unique. ",
+          "The synthetic control matches its predictors exactly, so its weights (and the estimate) are not unique. ",
           "Set a small penalty to select the unique Abadie-L'Hour solution.")
     }
     tagList(

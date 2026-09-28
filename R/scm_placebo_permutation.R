@@ -75,7 +75,8 @@ scm_placebo_permutation <- function(Y, N0, T0, X = NULL, ...) {
         post_rmspe_raw  = fit$post_rmspe_raw,
         rmspe_ratio_raw = fit$rmspe_ratio_raw,
         rmspe_ratio_hybrid = fit$rmspe_ratio_hybrid,
-        exact_fit   = fit$exact_fit
+        exact_fit   = fit$exact_fit,
+        exact_match = fit$exact_match
       ),
       gap = fit$gap,
       gap_raw = fit$gap_raw

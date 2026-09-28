@@ -264,6 +264,7 @@ fit_scm_spec <- function(Y, N0, T0, periods, spec, keep = "all") {
     trim_k = NA_real_, placebos_kept = n_placebo, placebos_total = n_placebo,
     gap = fit$gap, gap_raw = fit$gap_raw, rmspe_p = p, rmspe_rank = rank,
     rmspe_ratio = fit$rmspe_ratio_hybrid, exact_fit = fit$exact_fit,
+    exact_match = fit$exact_match,
     v = fit$v, n_predictors = fit$n_predictors
   )
   out["est"] <- list(NULL)

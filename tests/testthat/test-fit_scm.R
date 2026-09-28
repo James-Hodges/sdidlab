@@ -229,3 +229,16 @@ test_that("a permutation with an exact treated fit cannot be ranked", {
   expect_error(rmspe_pvalue(stats::setNames(r$rmspe_ratio_raw, r$unit), r$att,
                             r$unit[r$treated]), "non-finite")
 })
+
+test_that("an exact predictor match is flagged even when the pre-period is not reproduced", {
+  data("california_prop99", package = "synthdid", envir = environment())
+  s <- synthdid::panel.matrices(california_prop99)
+  expect_warning(fit <- fit_scm(s$Y, s$N0, s$T0, outcome_periods = c(5, 12, 19), bias_correct = FALSE),
+                 class = "sdidlab_exact_fit")
+  expect_true(fit$exact_match)
+  expect_false(fit$exact_fit)
+  expect_true(is.finite(fit$rmspe_ratio_raw))
+  # The penalty makes the weights unique and silences the warning.
+  expect_no_warning(fit_scm(s$Y, s$N0, s$T0, outcome_periods = c(5, 12, 19), bias_correct = FALSE,
+                            penalty = 1e-3))
+})

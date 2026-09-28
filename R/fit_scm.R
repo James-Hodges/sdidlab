@@ -113,11 +113,12 @@
 #'   plus `rmspe_ratio_hybrid` (corrected post over uncorrected pre) -- see
 #'   the code for which to hand [rmspe_pvalue()] -- `omega` (donor weights, named by the control
 #'   rownames), `v` (the predictor weights used), `n_predictors`,
-#'   `bias_correct`, `N0` and `T0`, plus `exact_fit`: `TRUE` when the
-#'   uncorrected synthetic control reproduces the pre-period exactly. An
-#'   exact fit warns (class `sdidlab_exact_fit`), because the weights are
-#'   then generally not unique and the estimate depends on which optimal
-#'   weights the solver returns; the RMSPE ratios are `NA`.
+#'   `bias_correct`, `N0` and `T0`, plus two flags. `exact_match` is `TRUE`
+#'   when the predictors are matched exactly: the weights are then generally
+#'   not unique and the estimate depends on which optimal weights are
+#'   returned, so it warns (class `sdidlab_exact_fit`) unless a `penalty` is
+#'   set. `exact_fit` is `TRUE` when the whole pre-period is reproduced
+#'   exactly, which also leaves the RMSPE ratios undefined (`NA`).
 #'
 #' @references
 #' Abadie, A., Diamond, A. and Hainmueller, J. (2010). Synthetic Control
@@ -316,12 +317,20 @@ fit_scm <- function(Y, N0, T0, X = NULL, outcome_periods = NULL,
   exact_tol <- 1e-7 * (1 + sqrt(mean(Y1[pre]^2)))
   ratio <- function(post, pre) if (pre > exact_tol) post / pre else NA_real_
   exact_fit <- pre_raw <= exact_tol
-  # With a positive penalty the weights are unique, so an exact fit is no
-  # longer ambiguous -- only the ratio stays undefined.
-  if (exact_fit && penalty == 0) {
+  # A separate, broader condition: the PREDICTORS are matched exactly. The
+  # weights are then generally not unique -- any mix of donors that hits
+  # the predictors is optimal -- even when pre-periods outside the predictor
+  # set are not reproduced, and different optimal mixes imply different
+  # effects.
+  disc <- Z1 - as.numeric(crossprod(Z0, w))
+  exact_match <- sqrt(sum(v * disc^2)) <= 1e-7 * (1 + sqrt(sum(v * Z1^2)))
+  # With a positive penalty the weights are unique, so neither is ambiguous
+  # any more; only an exact fit's ratio stays undefined.
+  if (exact_match && penalty == 0) {
     cli::cli_warn(c(
-      "The synthetic control reproduces the pre-period exactly (RMSPE {signif(pre_raw, 2)}).",
-      i = "With an exact fit the weights are generally not unique, and different optimal weights imply different effects.",
+      if (exact_fit) "The synthetic control reproduces the pre-period exactly (RMSPE {signif(pre_raw, 2)})."
+      else "The synthetic control matches the predictors exactly.",
+      i = "The weights are then generally not unique, and different optimal weights imply different effects.",
       i = "Treat the estimate as unidentified, or pass a small {.arg penalty} to select the unique penalised solution (Abadie and L'Hour 2021)."
     ), class = "sdidlab_exact_fit")
   }
@@ -357,6 +366,7 @@ fit_scm <- function(Y, N0, T0, X = NULL, outcome_periods = NULL,
     # numerator still reflects the de-biased effect.
     rmspe_ratio_hybrid = ratio(post_rmspe, pre_raw),
     exact_fit    = exact_fit,
+    exact_match  = exact_match,
     omega        = w,
     v            = v,
     n_predictors = ncol(Z),

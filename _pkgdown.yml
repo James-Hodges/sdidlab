@@ -1,0 +1,68 @@
+url: https://james-hodges.github.io/sdidlab/
+template:
+  bootstrap: 5
+  bootswatch: flatly
+
+home:
+  links:
+  - text: Author's site
+    href: https://jameshodges.cc/projects/sdidlab/
+
+navbar:
+  structure:
+    left: [intro, reference, articles, news]
+    right: [search, github]
+
+articles:
+- title: Articles
+  navbar: ~
+  contents:
+  - specs-and-runs
+  - placebo-inference
+  - synthetic-control
+
+reference:
+- title: Data and specifications
+  contents:
+  - sdid_panel
+  - prop99_panel
+  - sdid_spec
+  - spec_hash
+  - spec_yaml
+  - build_setup
+  - resolve_pool
+  - registry
+- title: Fitting
+  contents:
+  - fit_spec
+  - run_specs
+  - seed_for
+  - run_store
+  - write_spec_script
+- title: Estimators and inference
+  contents:
+  - fit_sdid
+  - placebo_se_trimmed
+  - adjusted_outcome
+  - project_out_covariates
+  - fit_scm
+  - sc_weights_simplex
+  - scm_placebo_permutation
+  - rmspe_pvalue
+- title: Results and plots
+  contents:
+  - sdid_results_table
+  - donor_weight_table
+  - donor_influence
+  - low_weight_units
+  - plots
+  - plot_att_forest
+  - theme_sdid
+- title: Demo
+  contents:
+  - run_demo
+- title: Internals
+  contents:
+  - spec_defaults
+  - van_der_corput
+  - sdidlab-package

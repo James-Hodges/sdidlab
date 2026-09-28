@@ -1,0 +1,135 @@
+---
+title: "Getting started"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 7.5, fig.height = 4.5,
+                      out.width = "100%", dpi = 110)
+```
+
+sdidlab fits synthetic difference-in-differences (SDID) for a single treated
+unit, with the inference and diagnostics that design needs. This vignette
+walks through the whole workflow on the standard example: California's
+Proposition 99, which raised the cigarette tax in 1989.
+
+```{r setup}
+library(sdidlab)
+```
+
+## A panel
+
+sdidlab works on a long data frame, one row per unit and period. You declare
+which columns are which with `sdid_panel()`. The Proposition 99 data ship
+with synthdid, and `prop99_panel()` wraps them:
+
+```{r}
+panel <- prop99_panel()
+panel
+```
+
+The panel has a 0/1 `treated` column, so sdidlab can work out the treated
+unit (California) and the first treated period (1989) by itself. For your own
+data, either give `sdid_panel()` a treatment column or put them in the
+specification.
+
+## A specification
+
+A specification describes one model completely: outcome, treated unit and
+timing, donor pool, covariates, estimator and inference. Anything you leave
+out takes its default.
+
+```{r}
+spec <- sdid_spec(
+  label = "Prop 99, SDID",
+  inference = list(replications = 100)
+)
+spec
+```
+
+## Fitting
+
+`fit_spec()` builds the estimator's inputs, fits the model and runs placebo
+inference. Placebo standard errors are simulated, so pass a seed to make one
+fit reproducible on its own; `seed_for(spec)` derives one from the
+specification itself.
+
+```{r}
+run <- fit_spec(spec, panel, seed = seed_for(spec))
+run
+```
+
+The estimate is the published one: Arkhangelsky et al. (2021) report
+`r round(run$fit$att, 1)` packs per capita. The point estimate and weights
+come straight from `synthdid::synthdid_estimate()`; with no trimming
+(`trim_k = Inf`) the standard error is synthdid's own placebo standard error,
+draw for draw. The default trims placebos that fit the pre-period more than
+five times worse than California does -- see
+`vignette("placebo-inference")` for why.
+
+## Looking at the fit
+
+Every plot takes the run and returns a ggplot. The trajectory shows
+California against its synthetic control, with the time weights along the
+bottom:
+
+```{r}
+plot_sdid_trajectory(run)
+```
+
+The gap path shows treated minus synthetic in every period, measured against
+the baseline SDID subtracts, so its post-period points average to the ATT:
+
+```{r}
+plot_gap_path(run)
+```
+
+The donor weights show which states make up the synthetic California:
+
+```{r}
+plot_donor_weights(run, top_n = 12)
+```
+
+And the placebo distribution shows where the standard error came from:
+
+```{r}
+plot_placebo_distribution(run)
+```
+
+## Comparing specifications
+
+`run_specs()` fits a list of specifications, each with its own seed, and
+`sdid_results_table()` collects them. Here the three estimators synthdid
+provides, plus a classic synthetic control:
+
+```{r}
+specs <- list(
+  sdid_spec(label = "SDID", inference = list(replications = 100)),
+  sdid_spec(label = "Synthetic control", estimator = "sc", inference = list(replications = 100)),
+  sdid_spec(label = "Difference-in-differences", estimator = "did", inference = list(replications = 100))
+)
+runs <- run_specs(specs, panel, progress = FALSE)
+results <- sdid_results_table(runs)
+results[, c("label", "ATT", "SE", "ci_lo", "ci_hi", "trend_rmse")]
+```
+
+```{r, fig.height = 3}
+plot_att_forest(data.frame(label = results$label, att = results$ATT,
+                           ci_lo = results$ci_lo, ci_hi = results$ci_hi),
+                highlight = "SDID", xlab = "Effect on packs per capita")
+```
+
+## Where next
+
+* `vignette("specs-and-runs")`: YAML specifications, sweeps, the run store,
+  generating reproducible scripts, and plugging in your own outcomes and
+  donor pools.
+* `vignette("placebo-inference")`: trimmed placebo inference and its
+  diagnostics.
+* `vignette("synthetic-control")`: the bias-corrected synthetic control,
+  exact fits, the Abadie-L'Hour penalty and permutation inference.
+* `run_demo()` opens an interactive app for all of the above.

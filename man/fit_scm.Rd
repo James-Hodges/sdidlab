@@ -87,11 +87,12 @@ computed on the uncorrected gaps with a \verb{_raw} suffix --
 plus \code{rmspe_ratio_hybrid} (corrected post over uncorrected pre) -- see
 the code for which to hand \code{\link[=rmspe_pvalue]{rmspe_pvalue()}} -- \code{omega} (donor weights, named by the control
 rownames), \code{v} (the predictor weights used), \code{n_predictors},
-\code{bias_correct}, \code{N0} and \code{T0}, plus \code{exact_fit}: \code{TRUE} when the
-uncorrected synthetic control reproduces the pre-period exactly. An
-exact fit warns (class \code{sdidlab_exact_fit}), because the weights are
-then generally not unique and the estimate depends on which optimal
-weights the solver returns; the RMSPE ratios are \code{NA}.
+\code{bias_correct}, \code{N0} and \code{T0}, plus two flags. \code{exact_match} is \code{TRUE}
+when the predictors are matched exactly: the weights are then generally
+not unique and the estimate depends on which optimal weights are
+returned, so it warns (class \code{sdidlab_exact_fit}) unless a \code{penalty} is
+set. \code{exact_fit} is \code{TRUE} when the whole pre-period is reproduced
+exactly, which also leaves the RMSPE ratios undefined (\code{NA}).
 }
 \description{
 The Abadie, Diamond and Hainmueller synthetic control, matched on an
