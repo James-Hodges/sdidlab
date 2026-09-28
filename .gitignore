@@ -1,0 +1,7 @@
+.Rproj.user
+.Rhistory
+.RData
+.DS_Store
+docs/
+*.tar.gz
+sdidlab.Rcheck/

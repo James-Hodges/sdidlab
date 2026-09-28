@@ -1,0 +1,36 @@
+Package: sdidlab
+Title: Specify, Run, Store and Plot Synthetic Difference-in-Differences Models
+Version: 0.1.0.9000
+Authors@R:
+    person("James", "Hodges", email = "jamesdavidhodges@gmail.com", role = c("aut", "cre"))
+Description: A workbench around the 'synthdid' estimator of Arkhangelsky,
+    Athey, Hirshberg, Imbens and Wager (2021) <doi:10.1257/aer.20190159>,
+    built for designs with a single treated unit. Adds trimmed placebo
+    inference for when a heterogeneous donor pool inflates the placebo
+    standard error, covariate residualisation on untreated cells, a
+    bias-corrected synthetic control with permutation inference, and fit
+    diagnostics that respect the level shift synthetic
+    difference-in-differences absorbs.
+License: MIT + file LICENSE
+URL: https://github.com/James-Hodges/sdidlab
+BugReports: https://github.com/James-Hodges/sdidlab/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.1)
+Imports:
+    cli,
+    purrr,
+    stats,
+    synthdid,
+    tibble
+Suggests:
+    fixest,
+    quadprog,
+    Synth,
+    testthat (>= 3.0.0),
+    withr
+Remotes:
+    synth-inference/synthdid@70c1ce3eac58e28c30b67435ca377bb48baa9b8a
+Config/testthat/edition: 3
