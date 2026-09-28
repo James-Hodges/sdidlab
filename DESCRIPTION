@@ -33,10 +33,15 @@ Imports:
     utils,
     yaml
 Suggests:
+    bslib,
     fixest,
+    knitr,
+    rmarkdown,
+    shiny,
     Synth,
     testthat (>= 3.0.0),
     withr
 Remotes:
     synth-inference/synthdid@70c1ce3eac58e28c30b67435ca377bb48baa9b8a
 Config/testthat/edition: 3
+VignetteBuilder: knitr

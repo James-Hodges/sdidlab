@@ -73,6 +73,7 @@ build_setup <- function(spec, panel) {
       X = build_covariate_array(spec, panel, m$Y),
       pool = pool, balance = list(dropped = bal$dropped),
       periods = as.numeric(colnames(m$Y)), blackout = blackout,
+      outcome = spec$data$outcome %|NA|% panel$outcome,
       treated_unit = treated, treated_label = unit_labels(panel, treated),
       treat_time = timing$treat_time, spec = spec
     ),

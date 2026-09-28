@@ -26,8 +26,9 @@
 #'
 #' @return A list with `results`, a tibble of one row per unit (`unit`,
 #'   `treated`, `att`, `pre_rmspe`, `post_rmspe`, `rmspe_ratio` and their
-#'   `_raw` counterparts computed before bias correction), and `gaps`, a
-#'   units x periods matrix of the corrected gap paths.
+#'   `_raw` counterparts computed before bias correction), `gaps`, a
+#'   units x periods matrix of the corrected gap paths, and `gaps_raw`, the
+#'   same before correction.
 #'
 #' @seealso [rmspe_pvalue()] for the ranking that turns this into a
 #'   p-value, and [fit_scm()] for the fit it repeats.
@@ -76,16 +77,22 @@ scm_placebo_permutation <- function(Y, N0, T0, X = NULL, ...) {
         rmspe_ratio_hybrid = fit$rmspe_ratio_hybrid,
         exact_fit   = fit$exact_fit
       ),
-      gap = fit$gap
+      gap = fit$gap,
+      gap_raw = fit$gap_raw
     )
   })
 
-  gaps <- do.call(rbind, purrr::map(fits, "gap"))
-  rownames(gaps) <- units
-  colnames(gaps) <- colnames(Y)
+  stack <- function(part) {
+    m <- do.call(rbind, purrr::map(fits, part))
+    dimnames(m) <- list(units, colnames(Y))
+    m
+  }
+  gaps <- stack("gap")
+  gaps_raw <- stack("gap_raw")
 
   list(
     results = purrr::list_rbind(purrr::map(fits, "row")),
-    gaps    = gaps
+    gaps    = gaps,
+    gaps_raw = gaps_raw
   )
 }

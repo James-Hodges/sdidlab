@@ -23,8 +23,9 @@ and every placebo, which is the point.}
 \value{
 A list with \code{results}, a tibble of one row per unit (\code{unit},
 \code{treated}, \code{att}, \code{pre_rmspe}, \code{post_rmspe}, \code{rmspe_ratio} and their
-\verb{_raw} counterparts computed before bias correction), and \code{gaps}, a
-units x periods matrix of the corrected gap paths.
+\verb{_raw} counterparts computed before bias correction), \code{gaps}, a
+units x periods matrix of the corrected gap paths, and \code{gaps_raw}, the
+same before correction.
 }
 \description{
 Refits \code{\link[=fit_scm]{fit_scm()}} once per unit, each time pretending that unit is the

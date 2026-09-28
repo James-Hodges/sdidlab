@@ -25,7 +25,7 @@ sdid_results_table <- function(runs, digits = 3) {
     data.frame(
       label = s$label %|NA|% s$id %|NA|% run$spec_hash,
       estimator = s$estimator,
-      outcome = s$data$outcome %|NA|% "(default)",
+      outcome = run$outcome %||% s$data$outcome,
       treated = run$treated_unit, treat_time = run$treat_time,
       window = paste0(min(run$periods), "-", max(run$periods)),
       N0 = f$N0, T0 = f$T0,

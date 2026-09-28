@@ -32,7 +32,7 @@ plot_placebo_trim(run, bins = 50)
 
 plot_donor_influence(run, label_n = 6L)
 
-plot_scm_gaps(run)
+plot_scm_gaps(run, corrected = FALSE)
 }
 \arguments{
 \item{run}{An \code{sdid_run}.}
@@ -46,6 +46,9 @@ plot_scm_gaps(run)
 \item{bins}{Histogram bins.}
 
 \item{label_n}{Donors to label.}
+
+\item{corrected}{For \code{plot_scm_gaps()}: plot bias-corrected gaps instead
+of the uncorrected ones.}
 }
 \value{
 A \code{ggplot}.

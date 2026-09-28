@@ -122,22 +122,31 @@ write_specs_yaml <- function(specs, path, title = "sdidlab specifications") {
 spec_to_plain <- function(spec) {
   plain <- unclass(spec)
   attr(plain, "spec_hash") <- NULL
-  rapply(plain, how = "replace", f = function(x) {
-    if (is.list(x)) return(x)
+  # Unset (NA) scalars are left out rather than written as `.na.character`:
+  # reading the file back restores them from the defaults.
+  clean <- function(x) {
+    if (is.list(x)) {
+      keep <- !vapply(x, function(v) !is.list(v) && length(v) == 1L && is.na(v), logical(1))
+      return(lapply(x[keep], clean))
+    }
     if (!length(x)) return(list())
     x
-  })
+  }
+  clean(plain)
 }
 
 # A field is shared if every spec has the same value and that value differs
 # from the default (a field left at its default is simply absent).
 shared_fields <- function(plain, base) {
   out <- list()
-  for (nm in names(base)) {
+  # Unset fields are absent from both the defaults and the specs, so look
+  # at every name that appears anywhere.
+  for (nm in unique(c(names(base), unlist(lapply(plain, names))))) {
     if (nm %in% c("id", "label", "note", "tags", "schema_version")) next
     vals <- lapply(plain, function(p) p[[nm]])
+    if (any(vapply(vals, is.null, logical(1)))) next
     if (is.list(base[[nm]]) && !is.null(names(base[[nm]])) && !identical(nm, "options")) {
-      sub <- shared_fields(lapply(vals, function(v) v %||% list()), base[[nm]])
+      sub <- shared_fields(vals, base[[nm]])
       if (length(sub)) out[[nm]] <- sub
     } else {
       first <- vals[[1]]

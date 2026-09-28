@@ -107,7 +107,7 @@ run_index_row <- function(run) {
     run_id = run$run_id, spec_hash = run$spec_hash,
     spec_id = s$id, label = s$label, note = s$note, tags = paste(s$tags, collapse = ","),
     created_at = run$meta$created_at, seeded = run$meta$seeded, seed = run$meta$seed,
-    outcome = s$data$outcome, treated_unit = run$treated_unit, treat_time = run$treat_time,
+    outcome = run$outcome %||% s$data$outcome, treated_unit = run$treated_unit, treat_time = run$treat_time,
     window_start = min(run$periods), window_end = max(run$periods),
     estimator = s$estimator, pool = pool_text(s$pool),
     covariate_mode = s$covariates$mode, n_covariates = length(s$covariates$vars),

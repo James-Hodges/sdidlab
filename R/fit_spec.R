@@ -69,6 +69,7 @@ fit_spec <- function(spec, panel, store = NULL, keep = c("all", "est", "none"),
       spec = spec, spec_hash = spec_hash(spec), run_id = new_run_id(spec),
       fit = fit, pool = setup$pool, balance = setup$balance,
       periods = setup$periods, blackout = setup$blackout,
+      outcome = setup$outcome,
       treated_unit = setup$treated_unit, treated_label = setup$treated_label,
       treat_time = setup$treat_time,
       timings = list(setup_secs = t_setup, fit_secs = t_fit,
@@ -251,7 +252,7 @@ fit_scm_spec <- function(Y, N0, T0, periods, spec, keep = "all") {
     se <- stats::sd(r$att[!r$treated])
     draws <- tibble::tibble(draw = seq_len(nrow(r)), att = r$att, rmse = r$pre_rmspe_raw,
                             keep = TRUE, placebo_unit = r$unit, treated = r$treated)
-    placebo_gaps <- perm$gaps
+    placebo_gaps <- list(corrected = perm$gaps, raw = perm$gaps_raw)
   }
   z <- stats::qnorm(1 - (1 - spec$inference$conf_level) / 2)
   out <- list(
@@ -261,7 +262,7 @@ fit_scm_spec <- function(Y, N0, T0, periods, spec, keep = "all") {
     N0 = N0, T0 = T0, n_periods = ncol(Y),
     omega = fit$omega, lambda = numeric(0), estimator = "scm",
     trim_k = NA_real_, placebos_kept = n_placebo, placebos_total = n_placebo,
-    gap = fit$gap, rmspe_p = p, rmspe_rank = rank,
+    gap = fit$gap, gap_raw = fit$gap_raw, rmspe_p = p, rmspe_rank = rank,
     rmspe_ratio = fit$rmspe_ratio_hybrid, exact_fit = fit$exact_fit,
     v = fit$v, n_predictors = fit$n_predictors
   )

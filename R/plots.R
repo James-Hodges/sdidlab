@@ -28,6 +28,8 @@
 #' @param bins Histogram bins.
 #' @param label_n Donors to label.
 #' @param se_method Passed to `synthdid::synthdid_plot()`.
+#' @param corrected For `plot_scm_gaps()`: plot bias-corrected gaps instead
+#'   of the uncorrected ones.
 #'
 #' @return A `ggplot`.
 #'
@@ -80,10 +82,13 @@ plot_gap_path <- function(run) {
   pal <- sdid_palette()
   periods <- run$periods
   T0 <- run$fit$T0
+  raw <- NULL
   if (identical(run$spec$estimator, "scm")) {
     gap <- as.numeric(run$fit$gap)
+    raw <- as.numeric(run$fit$gap_raw)
     baseline <- 0
-    caption <- "Bias-corrected treated-minus-synthetic gap. Periods used as predictors are mechanically near zero after the correction."
+    caption <- paste0("Solid: the bias-corrected gap, whose post-period average is the ATT (dotted). Periods used as predictors are pinned near zero by the correction.\n",
+                      "Dashed grey: the uncorrected gap, which shows the synthetic control's actual pre-period fit.")
   } else {
     require_run_part(run, "est", "fitted object")
     est <- run$fit$est
@@ -108,7 +113,7 @@ plot_gap_path <- function(run) {
     df <- df[order(df$period), , drop = FALSE]
   }
   last_pre <- periods[T0]
-  ggplot2::ggplot(df, ggplot2::aes(x = .data$period, y = .data$gap)) +
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$period, y = .data$gap)) +
     ggplot2::annotate("rect", xmin = min(periods) - 0.5, xmax = last_pre + 0.5,
                       ymin = -Inf, ymax = Inf, fill = pal$grid, alpha = 0.55) +
     ggplot2::geom_hline(yintercept = 0, colour = pal$zero, linewidth = 0.4) +
@@ -123,6 +128,11 @@ plot_gap_path <- function(run) {
       x = NULL, y = paste0("Gap: ", outcome_axis_label(run)), caption = caption
     ) +
     theme_sdid()
+  if (!is.null(raw)) {
+    p <- p + ggplot2::geom_line(data = tibble::tibble(period = periods, gap = raw),
+                                colour = pal$neutral, linetype = "dashed", linewidth = 0.6)
+  }
+  p
 }
 
 #' @rdname plots
@@ -298,11 +308,14 @@ plot_donor_influence <- function(run, label_n = 6L) {
 
 #' @rdname plots
 #' @export
-plot_scm_gaps <- function(run) {
+plot_scm_gaps <- function(run, corrected = FALSE) {
   if (!identical(run$spec$estimator, "scm")) cli::cli_abort("{.fn plot_scm_gaps} is for {.code estimator = \"scm\"} runs.")
   require_run_part(run, "placebo_gaps", "placebo gap paths")
   pal <- sdid_palette()
-  g <- run$fit$placebo_gaps
+  # Uncorrected by default, as in Abadie, Diamond and Hainmueller: the bias
+  # correction pins every predictor period to zero, which would flatten the
+  # pre-period and hide exactly the fit this figure exists to show.
+  g <- run$fit$placebo_gaps[[if (corrected) "corrected" else "raw"]]
   treated_row <- nrow(g)
   long <- tibble::tibble(
     unit = rep(rownames(g), times = ncol(g)),
@@ -321,7 +334,11 @@ plot_scm_gaps <- function(run) {
       title = "Treated gap against every placebo",
       subtitle = sprintf("%s | %s (post/pre RMSPE)", spec_subtitle(run$spec), p_txt),
       x = NULL, y = paste0("Gap: ", outcome_axis_label(run)),
-      caption = "Blue: the treated unit. Grey: each donor refitted as if it were treated, with the treated unit excluded from its pool."
+      caption = paste0(
+        "Blue: the treated unit. Grey: each donor refitted as if it were treated, with the treated unit excluded from its pool.\n",
+        if (corrected) "Bias-corrected gaps: periods used as predictors are pinned near zero by construction."
+        else "Uncorrected gaps, so the pre-period shows each synthetic control's actual fit. The p-value ranks corrected post-period gaps over this pre-period fit."
+      )
     ) +
     theme_sdid()
 }
@@ -412,14 +429,12 @@ require_run_part <- function(run, part, what) {
 
 outcome_axis_label <- function(run) {
   s <- run$spec
-  lab <- s$data$outcome_label %|NA|% s$data$outcome
-  if (is.na(lab)) return("Outcome")
-  reg <- .registry$outcomes[[s$data$outcome]]
-  if (!is.null(reg) && is.na(s$data$outcome_label)) {
-    lab <- reg$label
-    if (!is.na(reg$units)) lab <- paste0(lab, " (", reg$units, ")")
-  }
-  lab
+  if (!is.na(s$data$outcome_label)) return(s$data$outcome_label)
+  name <- run$outcome %||% s$data$outcome
+  if (is.null(name) || is.na(name)) return("Outcome")
+  reg <- .registry$outcomes[[name]]
+  if (is.null(reg)) return(name)
+  if (is.na(reg$units)) reg$label else paste0(reg$label, " (", reg$units, ")")
 }
 
 first_treated <- function(run) {
