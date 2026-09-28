@@ -1,6 +1,6 @@
 Package: sdidlab
 Title: Specify, Run, Store and Plot Synthetic Difference-in-Differences Models
-Version: 0.1.0.9000
+Version: 0.1.0
 Authors@R:
     person("James", "Hodges", email = "jamesdavidhodges@gmail.com", role = c("aut", "cre"))
 Description: A workbench around the 'synthdid' estimator of Arkhangelsky,

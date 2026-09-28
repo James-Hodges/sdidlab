@@ -73,6 +73,37 @@ r <- perm$results
 rmspe_pvalue(setNames(r$rmspe_ratio_raw, r$unit), r$att, r$unit[r$treated])
 ```
 
+## Workflow
+
+For more than a one-off fit, describe each model as a **specification** and
+let sdidlab handle the bookkeeping:
+
+``` r
+panel <- prop99_panel()          # or sdid_panel(your_data, unit = , time = , outcome = )
+spec  <- sdid_spec(label = "Prop 99", inference = list(replications = 200))
+run   <- fit_spec(spec, panel, seed = seed_for(spec), store = "runs")
+
+plot_sdid_trajectory(run)
+plot_gap_path(run)
+plot_placebo_distribution(run)
+```
+
+Specifications hash to a stable identifier, round-trip through YAML (one
+file can hold a whole robustness sweep), and fitted runs are saved so they
+can be reloaded and re-plotted without refitting. `write_spec_script()`
+writes a self-contained R script that reproduces every fit exactly.
+
+`run_demo()` opens an interactive app that does all of this in the browser:
+build a specification, fit it, inspect every diagnostic, compare fits, and
+download the specifications and a reproducing script.
+
+The articles cover each part in depth:
+
+- [Getting started](https://james-hodges.github.io/sdidlab/articles/sdidlab.html)
+- [Specifications, sweeps and the run store](https://james-hodges.github.io/sdidlab/articles/specs-and-runs.html)
+- [Placebo inference with one treated unit](https://james-hodges.github.io/sdidlab/articles/placebo-inference.html)
+- [Synthetic control: bias correction, exact fits and permutation inference](https://james-hodges.github.io/sdidlab/articles/synthetic-control.html)
+
 ## Validation
 
 The test suite checks sdidlab against independent implementations, not just

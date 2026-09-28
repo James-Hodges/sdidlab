@@ -1,4 +1,4 @@
-# sdidlab (development version)
+# sdidlab 0.1.0
 
 * First public release, extracted from a higher-education research pipeline
   and generalised to any long panel.
