@@ -16,7 +16,7 @@ fit_scm(
   v_method = c("equal", "mspe", "synth"),
   v_starts = 8L,
   v_maxit = 1000L,
-  fw_iter = 100000L
+  penalty = 0
 )
 }
 \arguments{
@@ -67,11 +67,16 @@ note in the code. Ignored when \code{v_method = "equal"}.}
 
 \item{v_maxit}{Nelder-Mead iterations per restart.}
 
-\item{fw_iter}{Maximum Frank-Wolfe iterations for the simplex solve. The
-default is generous on purpose: on the California Proposition 99 panel
-the solve needs about 12,500 iterations to converge, and stopping at 500
-left the objective 2.7\% above the optimum and moved the estimate by
-half a pack per capita. A warning is raised if the cap is reached.}
+\item{penalty}{Abadie-L'Hour (2021) penalty \code{lambda}, non-negative.
+Zero (the default) is the classic synthetic control. A positive value
+adds a charge for each donor's own distance from the treated unit,
+which makes the weights \strong{unique} and favours donors that resemble the
+treated unit individually rather than only on average. Its main use
+here is breaking ties when the pre-period is fitted exactly: any small
+positive value then picks, among the exact fits, the one built from the
+nearest donors. Larger values trade pre-period fit for locality, and as
+\code{penalty} grows the synthetic control becomes the single nearest
+neighbour. The scale is that of the standardised predictors.}
 }
 \value{
 A list with \code{att} (mean corrected gap over the post-treatment
@@ -121,17 +126,17 @@ outcome, which is what \code{Synth} does by default.
 \strong{Neither search dominates, which is why \code{"synth"} runs both.} \code{Synth}
 optimises \code{V} with \code{optimx} from a single equal-weight start and solves
 for \code{w} with an interior-point QP; this package uses several
-deterministic starts and a pairwise Frank-Wolfe solve. The \code{V} surface
+deterministic starts and an exact active-set solve (see
+\code{\link[=sc_weights_simplex]{sc_weights_simplex()}}). The \code{V} surface
 is rough, so the two searches can land in \emph{different} local minima, and
 either can find the better one. The objective is the same and is directly
 comparable, so taking the better of the two is free accuracy and the
 only defensible default when the surface is this rough.
 
-A second, quieter difference: the interior-point solve returns weights
-that are positive for nearly every donor, while Frank-Wolfe returns a
-handful. Both minimise the same loss -- when several convex combinations
-fit equally well the minimiser is not unique -- but they describe very
-different comparison groups, so report \code{omega} rather than assuming it.
+When several convex combinations of donors fit equally well the
+minimiser is not unique, and different solvers can return very different
+comparison groups with the same loss. \code{penalty} resolves such ties;
+without it, report \code{omega} rather than assuming it.
 
 \strong{Bias correction.} Even a good synthetic control leaves a residual
 discrepancy in the predictors, and that discrepancy biases the estimate.
@@ -155,6 +160,19 @@ Y <- matrix(rnorm(11 * 8), nrow = 11,
 Y[11, 7:8] <- Y[11, 7:8] + 3
 fit_scm(Y, N0 = 10, T0 = 6)$att
 
+}
+\references{
+Abadie, A., Diamond, A. and Hainmueller, J. (2010). Synthetic Control
+Methods for Comparative Case Studies. \emph{Journal of the American Statistical
+Association} 105(490), 493-505.
+
+Abadie, A. and L'Hour, J. (2021). A Penalized Synthetic Control Estimator
+for Disaggregated Data. \emph{Journal of the American Statistical Association}
+116(536), 1817-1834.
+
+Ben-Michael, E., Feller, A. and Rothstein, J. (2021). The Augmented
+Synthetic Control Method. \emph{Journal of the American Statistical
+Association} 116(536), 1789-1803.
 }
 \seealso{
 \code{\link[=rmspe_pvalue]{rmspe_pvalue()}} for the permutation inference this feeds,

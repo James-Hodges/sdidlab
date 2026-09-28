@@ -16,13 +16,13 @@ objective <- function(Z0, Z1, w, v = rep(1, ncol(Z0))) {
 test_that("sc_weights_simplex reaches an exactly attainable target", {
   Z0 <- matrix(c(-5, 0, 5, 9,
                  -5, 0, 5, 9), nrow = 4)
-  w <- sc_weights_simplex(Z0, c(0, 0), v = c(1, 1), iter = 5000L)
+  w <- sc_weights_simplex(Z0, c(0, 0), v = c(1, 1))
   expect_lt(objective(Z0, c(0, 0), w), 1e-4)
 })
 
 test_that("sc_weights_simplex mixes donors when no single one will do", {
   Z0 <- matrix(c(0, 10, 100), nrow = 3)
-  w <- sc_weights_simplex(Z0, 5, v = 1, iter = 5000L)
+  w <- sc_weights_simplex(Z0, 5, v = 1)
   expect_lt(objective(Z0, 5, w), 1e-4)
   expect_gt(sum(w > 1e-6), 1L)          # genuinely interior, not a corner
 })
@@ -31,26 +31,9 @@ test_that("sc_weights_simplex gets as close as it can to an unattainable target"
   # The target sits outside the donors' convex hull: the best it can do is
   # put all its weight on the nearest donor, and that solution IS unique.
   Z0 <- matrix(c(0, 10, 100), nrow = 3)
-  w <- sc_weights_simplex(Z0, -50, v = 1, iter = 5000L)
+  w <- sc_weights_simplex(Z0, -50, v = 1)
   expect_equal(unname(w[1]), 1, tolerance = 1e-3)
 })
-
-# Fixtures carry noise deliberately. On a perfectly deterministic panel the
-# solver finds an EXACT single-donor match, which makes the pre-period RMSPE
-# zero (so the RMSPE ratio is undefined) and leaves one positive-weight
-# donor (so the bias-correction regression is skipped). Neither is a bug in
-# the estimator; both make the fixture test nothing.
-toy <- function(effect = 5) {
-  periods <- 2010:2017
-  base <- outer(c(10, 12, 14, 16, 18, 13), rep(1, length(periods)))
-  trend <- outer(rep(1, 6), seq_along(periods))
-  Y <- base + trend +
-    withr::with_seed(42, matrix(stats::rnorm(6 * length(periods), sd = 0.4),
-                                nrow = 6))
-  Y[6, 7:8] <- Y[6, 7:8] + effect
-  dimnames(Y) <- list(c(paste0("d", 1:5), "treated"), periods)
-  Y
-}
 
 test_that("fit_scm recovers a known effect on a parallel-trends panel", {
   fit <- fit_scm(toy(effect = 5), N0 = 5, T0 = 6, bias_correct = FALSE)

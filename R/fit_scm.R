@@ -32,17 +32,17 @@
 #' **Neither search dominates, which is why `"synth"` runs both.** `Synth`
 #' optimises `V` with `optimx` from a single equal-weight start and solves
 #' for `w` with an interior-point QP; this package uses several
-#' deterministic starts and a pairwise Frank-Wolfe solve. The `V` surface
+#' deterministic starts and an exact active-set solve (see
+#' [sc_weights_simplex()]). The `V` surface
 #' is rough, so the two searches can land in *different* local minima, and
 #' either can find the better one. The objective is the same and is directly
 #' comparable, so taking the better of the two is free accuracy and the
 #' only defensible default when the surface is this rough.
 #'
-#' A second, quieter difference: the interior-point solve returns weights
-#' that are positive for nearly every donor, while Frank-Wolfe returns a
-#' handful. Both minimise the same loss -- when several convex combinations
-#' fit equally well the minimiser is not unique -- but they describe very
-#' different comparison groups, so report `omega` rather than assuming it.
+#' When several convex combinations of donors fit equally well the
+#' minimiser is not unique, and different solvers can return very different
+#' comparison groups with the same loss. `penalty` resolves such ties;
+#' without it, report `omega` rather than assuming it.
 #'
 #' **Bias correction.** Even a good synthetic control leaves a residual
 #' discrepancy in the predictors, and that discrepancy biases the estimate.
@@ -94,11 +94,16 @@
 #'   weights and the rest scattered. One start is not enough -- see the
 #'   note in the code. Ignored when `v_method = "equal"`.
 #' @param v_maxit Nelder-Mead iterations per restart.
-#' @param fw_iter Maximum Frank-Wolfe iterations for the simplex solve. The
-#'   default is generous on purpose: on the California Proposition 99 panel
-#'   the solve needs about 12,500 iterations to converge, and stopping at 500
-#'   left the objective 2.7% above the optimum and moved the estimate by
-#'   half a pack per capita. A warning is raised if the cap is reached.
+#' @param penalty Abadie-L'Hour (2021) penalty `lambda`, non-negative.
+#'   Zero (the default) is the classic synthetic control. A positive value
+#'   adds a charge for each donor's own distance from the treated unit,
+#'   which makes the weights **unique** and favours donors that resemble the
+#'   treated unit individually rather than only on average. Its main use
+#'   here is breaking ties when the pre-period is fitted exactly: any small
+#'   positive value then picks, among the exact fits, the one built from the
+#'   nearest donors. Larger values trade pre-period fit for locality, and as
+#'   `penalty` grows the synthetic control becomes the single nearest
+#'   neighbour. The scale is that of the standardised predictors.
 #'
 #' @return A list with `att` (mean corrected gap over the post-treatment
 #'   periods), `gap` (the corrected gap in every period, named by the
@@ -113,6 +118,19 @@
 #'   exact fit warns (class `sdidlab_exact_fit`), because the weights are
 #'   then generally not unique and the estimate depends on which optimal
 #'   weights the solver returns; the RMSPE ratios are `NA`.
+#'
+#' @references
+#' Abadie, A., Diamond, A. and Hainmueller, J. (2010). Synthetic Control
+#' Methods for Comparative Case Studies. *Journal of the American Statistical
+#' Association* 105(490), 493-505.
+#'
+#' Abadie, A. and L'Hour, J. (2021). A Penalized Synthetic Control Estimator
+#' for Disaggregated Data. *Journal of the American Statistical Association*
+#' 116(536), 1817-1834.
+#'
+#' Ben-Michael, E., Feller, A. and Rothstein, J. (2021). The Augmented
+#' Synthetic Control Method. *Journal of the American Statistical
+#' Association* 116(536), 1789-1803.
 #'
 #' @seealso [rmspe_pvalue()] for the permutation inference this feeds,
 #'   [fit_sdid()] for the synthetic-DiD and DiD comparisons.
@@ -129,7 +147,7 @@ fit_scm <- function(Y, N0, T0, X = NULL, outcome_periods = NULL,
                     bias_correct = TRUE, bc_ridge = 1e-4,
                     bc_donors = c("auto", "positive", "all"),
                     v_method = c("equal", "mspe", "synth"),
-                    v_starts = 8L, v_maxit = 1000L, fw_iter = 100000L) {
+                    v_starts = 8L, v_maxit = 1000L, penalty = 0) {
   v_method  <- match.arg(v_method)
   bc_donors <- match.arg(bc_donors)
   if (N0 < 2) cli::cli_abort("Need at least 2 control units; got {N0}.")
@@ -170,7 +188,7 @@ fit_scm <- function(Y, N0, T0, X = NULL, outcome_periods = NULL,
   Y1 <- Y[N0 + 1L, ]
 
   mspe_for <- function(v) {
-    w <- sc_weights_simplex(Z0, Z1, v, iter = fw_iter)
+    w <- sc_weights_simplex(Z0, Z1, v, penalty = penalty)
     mean((Y1[pre] - as.numeric(crossprod(Y0[, pre, drop = FALSE], w)))^2)
   }
   if (identical(v_method, "synth") && !requireNamespace("Synth", quietly = TRUE)) {
@@ -238,7 +256,7 @@ fit_scm <- function(Y, N0, T0, X = NULL, outcome_periods = NULL,
   v <- v / sum(v) * length(v)
   names(v) <- colnames(Z)
 
-  w <- sc_weights_simplex(Z0, Z1, v, iter = fw_iter, warn = TRUE)
+  w <- sc_weights_simplex(Z0, Z1, v, penalty = penalty)
   names(w) <- rownames(Y)[seq_len(N0)]
 
   gap_raw <- Y1 - as.numeric(crossprod(Y0, w))
@@ -298,11 +316,13 @@ fit_scm <- function(Y, N0, T0, X = NULL, outcome_periods = NULL,
   exact_tol <- 1e-7 * (1 + sqrt(mean(Y1[pre]^2)))
   ratio <- function(post, pre) if (pre > exact_tol) post / pre else NA_real_
   exact_fit <- pre_raw <= exact_tol
-  if (exact_fit) {
+  # With a positive penalty the weights are unique, so an exact fit is no
+  # longer ambiguous -- only the ratio stays undefined.
+  if (exact_fit && penalty == 0) {
     cli::cli_warn(c(
       "The synthetic control reproduces the pre-period exactly (RMSPE {signif(pre_raw, 2)}).",
       i = "With an exact fit the weights are generally not unique, and different optimal weights imply different effects.",
-      i = "Treat the estimate as unidentified: use fewer predictors, more pre-periods, or a penalised synthetic control."
+      i = "Treat the estimate as unidentified, or pass a small {.arg penalty} to select the unique penalised solution (Abadie and L'Hour 2021)."
     ), class = "sdidlab_exact_fit")
   }
 
@@ -348,101 +368,143 @@ fit_scm <- function(Y, N0, T0, X = NULL, outcome_periods = NULL,
 
 #' Simplex weights minimising a V-weighted predictor discrepancy
 #'
-#' Pairwise Frank-Wolfe on the unit simplex, with an exact line search. Each
-#' step moves weight from the active donor the gradient likes *least* to the
-#' donor it likes best, as far as the closed-form minimiser along that
-#' direction allows. No dependencies, no matrix inversion, and every iterate
-#' is feasible -- which is what makes it safe to call tens of thousands of
-#' times inside a `V` search crossed with a placebo permutation.
+#' Solves the synthetic-control weight problem exactly:
+#' \deqn{\min_w (Z_1 - Z_0' w)' V (Z_1 - Z_0' w) + \lambda \sum_j w_j
+#'   (Z_1 - Z_{0j})' V (Z_1 - Z_{0j})}
+#' over the unit simplex (`w >= 0`, `sum(w) = 1`), where `V = diag(v)` and
+#' `lambda` is the Abadie-L'Hour `penalty` (zero by default, the classic
+#' synthetic control).
 #'
-#' Two departures from textbook Frank-Wolfe, both load-bearing here:
+#' # Method
 #'
-#' * **The step size is solved for**, not taken from the `2/(t+2)` schedule.
-#'   The objective is quadratic along the search direction, so the
-#'   minimising step has a closed form.
-#' * **Steps are pairwise** (Lacoste-Julien and Jaggi 2015) rather than
-#'   towards a vertex from wherever the iterate is. Classical Frank-Wolfe
-#'   zig-zags as it approaches a face of the simplex and converges at
-#'   `O(1/t)`. Pairwise steps converge linearly, but the rate depends on the
-#'   conditioning of the donors: well-separated problems finish in tens of
-#'   iterations, while a real panel of highly correlated pre-period outcomes
-#'   can need tens of thousands. Each iteration is cheap, so the cap is set
-#'   high rather than trading accuracy for speed.
+#' A primal active-set method -- Lawson and Hanson's non-negative least
+#' squares algorithm, adapted to the simplex. It keeps a working set of
+#' donors, solves the equality-constrained problem on that set exactly
+#' (through a pseudo-inverse, so a singular set is handled), steps back to
+#' feasibility when a weight would turn negative, and adds the donor whose
+#' gradient most violates optimality. It stops at the exact KKT point: every
+#' donor with positive weight has the same gradient and no donor has a
+#' lower one. Starting from the nearest donor, it typically needs about two
+#' steps per donor in the final support.
 #'
-#' Pairwise steps also **preserve sparsity**, which matters beyond speed: a
-#' synthetic control is meant to name a handful of comparison units, and
-#' iterating from a uniform start with vertex steps leaves every donor
-#' carrying a small positive weight. This starts from the single closest
-#' donor and adds others only when they earn it.
+#' Two alternatives were tried and rejected. A first-order (Frank-Wolfe)
+#' solve needs over 12,000 iterations on the highly collinear pre-period
+#' outcomes of the Proposition 99 panel, and at any practical iteration cap
+#' returns weights well short of the optimum. A dual QP solver needs a ridge
+#' to make the singular quadratic term invertible, which with a penalty
+#' makes the problem nearly linear and the solve numerically unreliable.
 #'
-#' Where several convex combinations of donors hit the target exactly -- the
-#' normal case with more donors than predictors -- the minimiser is not
-#' unique and which one is returned depends on the path. Judge a solution by
-#' its objective value, never by its weights.
+#' # Uniqueness
+#'
+#' When the treated unit lies inside the donors' convex hull, many weight
+#' vectors can fit the predictors equally well, and they imply different
+#' counterfactuals. Which of them is returned then depends on the order in
+#' which donors enter the working set -- deterministic, but arbitrary.
+#' [fit_scm()] warns when the fit is exact. A positive `penalty` makes the
+#' solution unique (Abadie and L'Hour 2021).
 #'
 #' @param Z0 Donors x predictors matrix, already standardised.
 #' @param Z1 The treated unit's predictor vector.
 #' @param v Non-negative predictor weights (the diagonal of `V`).
-#' @param iter Maximum iterations.
-#' @param tol Stop when the pairwise gap -- the gradient difference between
-#'   the worst active donor and the best donor -- falls below this. It is an
-#'   upper bound on the Frank-Wolfe duality gap, which in turn bounds how far
-#'   the objective is above the optimum, so stopping on it is conservative.
-#' @param warn Warn if `iter` is reached before `tol`. Off by default because
-#'   the V search calls this thousands of times; [fit_scm()] turns it on for
-#'   the final solve.
+#' @param penalty The Abadie-L'Hour penalty `lambda`, non-negative. The
+#'   scale is that of the standardised predictors. See [fit_scm()] for when
+#'   to use it.
 #'
 #' @return A numeric vector of donor weights, non-negative and summing to 1.
+#'
+#' @references Lawson, C. L. and Hanson, R. J. (1974). *Solving Least
+#'   Squares Problems*. Prentice-Hall, chapter 23.
 #'
 #' @examples
 #' Z0 <- matrix(c(0, 1, 2, 0, 1, 2), nrow = 3)
 #' sc_weights_simplex(Z0, c(1, 1), v = c(1, 1))
 #'
 #' @export
-sc_weights_simplex <- function(Z0, Z1, v = rep(1, ncol(Z0)), iter = 100000L,
-                               tol = 1e-10, warn = FALSE) {
+sc_weights_simplex <- function(Z0, Z1, v = rep(1, ncol(Z0)), penalty = 0) {
+  if (!is.numeric(penalty) || length(penalty) != 1L || !is.finite(penalty) || penalty < 0) {
+    cli::cli_abort("{.arg penalty} must be a single non-negative number.")
+  }
+  Z0 <- as.matrix(Z0)
   n <- nrow(Z0)
   if (n == 1L) return(1)
-  vZ0 <- sweep(Z0, 2, v, "*")     # columns scaled once, not per iteration
+  if (length(Z1) != ncol(Z0) || length(v) != ncol(Z0)) {
+    cli::cli_abort("{.arg Z1} and {.arg v} must have one entry per predictor ({ncol(Z0)}).")
+  }
 
-  # Start at the single closest donor rather than the uniform mixture: with
-  # pairwise steps the support only grows, so starting sparse ends sparse.
-  d0 <- sweep(Z0, 2, Z1, "-")
-  start <- which.min(as.numeric((d0 * d0) %*% v))
+  # Objective w'Gw - 2c'w + penalty * dist'w (+ constant), with
+  #   G = Z0 V Z0',  c = Z0 V Z1,  dist_j = (Z1 - Z0j)' V (Z1 - Z0j).
+  vZ0t <- t(Z0) * v
+  G    <- Z0 %*% vZ0t
+  cc   <- as.numeric(Z0 %*% (v * Z1))
+  dist <- as.numeric((sweep(Z0, 2, Z1, "-")^2) %*% v)
+  lin  <- 2 * cc - penalty * dist            # the gradient is 2 G w - lin
+  tol  <- 1e-11 * max(1, abs(lin), max(abs(G)))
+
+  # Null space of the working set's quadratic term within the simplex's
+  # tangent space: directions p with G_SS p = 0 and sum(p) = 0. Along them
+  # the objective is linear, so if `lin` has a component there the
+  # restricted problem has no interior minimum.
+  null_dirs <- function(S) {
+    Q <- rbind(G[S, S, drop = FALSE], 1)
+    sv <- svd(Q, nu = 0, nv = length(S))
+    d <- c(sv$d, rep(0, length(S) - length(sv$d)))
+    sv$v[, d <= max(sv$d) * 1e-10, drop = FALSE]
+  }
+  # Stationary point of the working-set problem: the KKT system
+  #   [2 G_SS  1] [w]   [lin_S]
+  #   [1'      0] [nu] = [1    ]
+  # by pseudo-inverse (minimum norm when the system is singular).
+  stationary <- function(S) {
+    m <- length(S)
+    M <- rbind(cbind(2 * G[S, S, drop = FALSE], 1), c(rep(1, m), 0))
+    sv <- svd(M)
+    keep <- sv$d > max(sv$d) * 1e-12
+    z <- sv$v[, keep, drop = FALSE] %*% ((t(sv$u[, keep, drop = FALSE]) %*% c(lin[S], 1)) / sv$d[keep])
+    z[seq_len(m)]
+  }
+  # Move w_S towards `target` (or along direction `p`) until the first
+  # weight reaches zero, then drop the zeros from the working set.
+  drop_zeros <- function(S) S[w[S] > tol]
+
   w <- numeric(n)
-  w[start] <- 1
-  resid <- Z1 - Z0[start, ]
-
-  converged <- FALSE
-  for (t in seq_len(iter)) {
-    # grad_i = -2 * sum_k v_k * Z0[i, k] * resid_k
-    grad <- -2 * as.numeric(vZ0 %*% resid)
-    s <- which.min(grad)                       # vertex to move towards
-    active <- which(w > 0)
-    a <- active[which.max(grad[active])]       # active vertex to move away from
-    # s == a means every active donor already has the minimal gradient,
-    # which is the optimality condition on the simplex.
-    if (s == a) { converged <- TRUE; break }
-    gap <- grad[a] - grad[s]                   # >= 0; zero at the optimum
-    if (!is.finite(gap) || gap <= tol) { converged <- TRUE; break }
-    u <- Z0[s, ] - Z0[a, ]                     # change in fitted predictors
-    denom <- sum(v * u * u)
-    if (denom <= 0) break
-    # Exact minimiser along w + step * (e_s - e_a), capped by how much
-    # weight the away vertex actually has to give.
-    step <- min(w[a], max(0, sum(v * u * resid) / denom))
-    if (step <= 0) break
-    w[s] <- w[s] + step
-    w[a] <- w[a] - step
-    resid <- resid - step * u
+  S <- which.min(dist)                       # start at the nearest donor
+  w[S] <- 1
+  for (outer in seq_len(20L * n + 100L)) {
+    # Solve the working-set problem to optimality, shrinking S as needed.
+    for (inner in seq_len(4L * n + 10L)) {
+      N <- if (length(S) > 1L) null_dirs(S) else NULL
+      if (!is.null(N) && ncol(N) && sqrt(sum((crossprod(N, lin[S]))^2)) > tol) {
+        # Ray step: objective decreases linearly along p = N N' lin_S.
+        p <- as.numeric(N %*% crossprod(N, lin[S]))
+        neg <- p < 0
+        w[S] <- w[S] + min(w[S][neg] / -p[neg]) * p
+        w[w < tol] <- 0
+        S <- drop_zeros(S)
+        next
+      }
+      z <- stationary(S)
+      if (all(z > tol)) {
+        w[] <- 0
+        w[S] <- z
+        break
+      }
+      # Step from the current feasible point towards z only as far as
+      # feasibility allows, then drop whatever reached zero.
+      neg <- z <= tol
+      alpha <- min(w[S][neg] / (w[S][neg] - z[neg]))
+      w[S] <- w[S] + alpha * (z - w[S])
+      w[w < tol] <- 0
+      S <- drop_zeros(S)
+    }
+    grad <- 2 * as.numeric(G %*% w) - lin
+    mu <- mean(grad[S])                      # common gradient on the support
+    out <- setdiff(seq_len(n), S)
+    if (!length(out)) break
+    j <- out[which.min(grad[out])]
+    if (grad[j] >= mu - tol) break           # KKT: no donor outside S does better
+    S <- c(S, j)
   }
-  if (warn && !converged) {
-    cli::cli_warn(c(
-      "Synthetic-control weights did not converge in {iter} iteration{?s}.",
-      i = "Pairwise gap {signif(gap, 3)} is above tol = {tol}; raise {.arg fw_iter}."
-    ))
-  }
-  w[w < 1e-10] <- 0
+  w[w < 0] <- 0
   w / sum(w)
 }
 

@@ -4,14 +4,7 @@
 \alias{sc_weights_simplex}
 \title{Simplex weights minimising a V-weighted predictor discrepancy}
 \usage{
-sc_weights_simplex(
-  Z0,
-  Z1,
-  v = rep(1, ncol(Z0)),
-  iter = 100000L,
-  tol = 1e-10,
-  warn = FALSE
-)
+sc_weights_simplex(Z0, Z1, v = rep(1, ncol(Z0)), penalty = 0)
 }
 \arguments{
 \item{Z0}{Donors x predictors matrix, already standardised.}
@@ -20,57 +13,55 @@ sc_weights_simplex(
 
 \item{v}{Non-negative predictor weights (the diagonal of \code{V}).}
 
-\item{iter}{Maximum iterations.}
-
-\item{tol}{Stop when the pairwise gap -- the gradient difference between
-the worst active donor and the best donor -- falls below this. It is an
-upper bound on the Frank-Wolfe duality gap, which in turn bounds how far
-the objective is above the optimum, so stopping on it is conservative.}
-
-\item{warn}{Warn if \code{iter} is reached before \code{tol}. Off by default because
-the V search calls this thousands of times; \code{\link[=fit_scm]{fit_scm()}} turns it on for
-the final solve.}
+\item{penalty}{The Abadie-L'Hour penalty \code{lambda}, non-negative. The
+scale is that of the standardised predictors. See \code{\link[=fit_scm]{fit_scm()}} for when
+to use it.}
 }
 \value{
 A numeric vector of donor weights, non-negative and summing to 1.
 }
 \description{
-Pairwise Frank-Wolfe on the unit simplex, with an exact line search. Each
-step moves weight from the active donor the gradient likes \emph{least} to the
-donor it likes best, as far as the closed-form minimiser along that
-direction allows. No dependencies, no matrix inversion, and every iterate
-is feasible -- which is what makes it safe to call tens of thousands of
-times inside a \code{V} search crossed with a placebo permutation.
+Solves the synthetic-control weight problem exactly:
+\deqn{\min_w (Z_1 - Z_0' w)' V (Z_1 - Z_0' w) + \lambda \sum_j w_j
+  (Z_1 - Z_{0j})' V (Z_1 - Z_{0j})}
+over the unit simplex (\code{w >= 0}, \code{sum(w) = 1}), where \code{V = diag(v)} and
+\code{lambda} is the Abadie-L'Hour \code{penalty} (zero by default, the classic
+synthetic control).
 }
-\details{
-Two departures from textbook Frank-Wolfe, both load-bearing here:
-\itemize{
-\item \strong{The step size is solved for}, not taken from the \code{2/(t+2)} schedule.
-The objective is quadratic along the search direction, so the
-minimising step has a closed form.
-\item \strong{Steps are pairwise} (Lacoste-Julien and Jaggi 2015) rather than
-towards a vertex from wherever the iterate is. Classical Frank-Wolfe
-zig-zags as it approaches a face of the simplex and converges at
-\code{O(1/t)}. Pairwise steps converge linearly, but the rate depends on the
-conditioning of the donors: well-separated problems finish in tens of
-iterations, while a real panel of highly correlated pre-period outcomes
-can need tens of thousands. Each iteration is cheap, so the cap is set
-high rather than trading accuracy for speed.
+\section{Method}{
+A primal active-set method -- Lawson and Hanson's non-negative least
+squares algorithm, adapted to the simplex. It keeps a working set of
+donors, solves the equality-constrained problem on that set exactly
+(through a pseudo-inverse, so a singular set is handled), steps back to
+feasibility when a weight would turn negative, and adds the donor whose
+gradient most violates optimality. It stops at the exact KKT point: every
+donor with positive weight has the same gradient and no donor has a
+lower one. Starting from the nearest donor, it typically needs about two
+steps per donor in the final support.
+
+Two alternatives were tried and rejected. A first-order (Frank-Wolfe)
+solve needs over 12,000 iterations on the highly collinear pre-period
+outcomes of the Proposition 99 panel, and at any practical iteration cap
+returns weights well short of the optimum. A dual QP solver needs a ridge
+to make the singular quadratic term invertible, which with a penalty
+makes the problem nearly linear and the solve numerically unreliable.
 }
 
-Pairwise steps also \strong{preserve sparsity}, which matters beyond speed: a
-synthetic control is meant to name a handful of comparison units, and
-iterating from a uniform start with vertex steps leaves every donor
-carrying a small positive weight. This starts from the single closest
-donor and adds others only when they earn it.
-
-Where several convex combinations of donors hit the target exactly -- the
-normal case with more donors than predictors -- the minimiser is not
-unique and which one is returned depends on the path. Judge a solution by
-its objective value, never by its weights.
+\section{Uniqueness}{
+When the treated unit lies inside the donors' convex hull, many weight
+vectors can fit the predictors equally well, and they imply different
+counterfactuals. Which of them is returned then depends on the order in
+which donors enter the working set -- deterministic, but arbitrary.
+\code{\link[=fit_scm]{fit_scm()}} warns when the fit is exact. A positive \code{penalty} makes the
+solution unique (Abadie and L'Hour 2021).
 }
+
 \examples{
 Z0 <- matrix(c(0, 1, 2, 0, 1, 2), nrow = 3)
 sc_weights_simplex(Z0, c(1, 1), v = c(1, 1))
 
+}
+\references{
+Lawson, C. L. and Hanson, R. J. (1974). \emph{Solving Least
+Squares Problems}. Prentice-Hall, chapter 23.
 }
