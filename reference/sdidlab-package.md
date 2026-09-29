@@ -1,0 +1,22 @@
+# sdidlab: Specify, Run, Store and Plot Synthetic Difference-in-Differences Models
+
+A workbench around the 'synthdid' estimator of Arkhangelsky, Athey,
+Hirshberg, Imbens and Wager (2021)
+[doi:10.1257/aer.20190159](https://doi.org/10.1257/aer.20190159) , built
+for designs with a single treated unit. Adds trimmed placebo inference
+for when a heterogeneous donor pool inflates the placebo standard error,
+covariate residualisation on untreated cells, a bias-corrected synthetic
+control with permutation inference, and fit diagnostics that respect the
+level shift synthetic difference-in-differences absorbs.
+
+## See also
+
+Useful links:
+
+- <https://github.com/James-Hodges/sdidlab>
+
+- Report bugs at <https://github.com/James-Hodges/sdidlab/issues>
+
+## Author
+
+**Maintainer**: James Hodges <jamesdavidhodges@gmail.com>
